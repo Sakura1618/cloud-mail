@@ -1,26 +1,38 @@
+# ⚠️ 此文件就是 Cloudflare Workers Builds（Git 集成）实际部署使用的配置：
+#    trigger "部署默认分支" → root_directory=/mail-worker → deploy_command="npx wrangler deploy"
+#    因此这里必须写真实的（非机密）D1/KV 绑定，否则每次 push main 都会把线上 Worker
+#    重新部署成没有 kv/db 的版本（2026-10-15 的线上故障就是这个原因）。
+#
+# NOTE: This is the config Workers Builds deploys (`npx wrangler deploy` in /mail-worker),
+# so the real (non-secret) D1 + KV bindings must live here.
+#
+# 机密不写进仓库：keep_vars = true 会保留面板上已部署的 vars（domain / admin / jwt_secret），
+# 所以下面的 [vars] 保持注释状态即可，请勿把真实值填进去。
+# Secrets stay out of the repo: keep_vars = true preserves the dashboard-deployed vars on
+# every deploy, so leave [vars] commented — do NOT paste real values here.
+
 name = "cloud-mail"
 main = "src/index.js"
 compatibility_date = "2025-06-04"
 keep_vars = true
+workers_dev = true
+preview_urls = true
 
 [observability]
 enabled = true
 
-#[[d1_databases]]
-#binding = "db"			#d1数据库绑定名默认不可修改
-#database_name = ""		#d1数据库名字
-#database_id = ""		#d1数据库id
+[[routes]]
+pattern = "sakura1618.com"
+custom_domain = true
 
-#[[kv_namespaces]]
-#binding = "kv"			#kv绑定名默认不可修改
-#id = ""					#kv数据库id
+[[d1_databases]]
+binding = "db"			#d1数据库绑定名默认不可修改
+database_name = "cloud-mail"	#d1数据库名字
+database_id = "55b049e6-a3e5-4922-8f05-f4d98a14a46a"	#d1数据库id
 
-#[[r2_buckets]]
-#binding = "r2"			#r2对象存储绑定名默认不可修改
-#bucket_name = ""		#r2对象存储桶的名字
-
-#[[send_email]]
-#name = "email"			#CF发件, 配置后优先使用
+[[kv_namespaces]]
+binding = "kv"			#kv绑定名默认不可修改
+id = "162191b95d524073bb8c78e99263952a"	#kv数据库id
 
 [ai]
 binding = "ai"
