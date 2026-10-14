@@ -61,8 +61,9 @@ const emailService = {
 		}
 
 		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+			const accountRow = await accountService.selectById(c, accountId);
+			// 账号不存在时按空结果处理，避免内部 TypeError 泄露与存在性 oracle
+			allReceive = accountRow ? accountRow.allReceive : 0;
 		}
 
 		const filters = this.emailListFilters({ userId, accountId, type, allReceive, emailId, timeSort });
@@ -826,11 +827,18 @@ const emailService = {
 
 	async latest(c, params, userId) {
 		let { emailId, accountId, allReceive } = params;
+		accountId = Number(accountId);
 		allReceive = Number(allReceive);
+		emailId = Number(emailId) || 0;
+
+		if (isNaN(accountId)) {
+			throw new BizError(t('emptyAccountId'));
+		}
 
 		if (isNaN(allReceive)) {
-			let accountRow = await accountService.selectById(c, accountId);
-			allReceive = accountRow.allReceive;
+			const accountRow = await accountService.selectById(c, accountId);
+			// 账号不存在时按空结果处理，避免 D1 驱动错误回显与存在性 oracle
+			allReceive = accountRow ? accountRow.allReceive : 0;
 		}
 
 		const list = await orm(c).select({ ...emailListColumns }).from(email)

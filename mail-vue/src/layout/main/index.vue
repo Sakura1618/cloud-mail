@@ -16,6 +16,7 @@ import {useSettingStore} from "@/store/setting.js";
 import {computed, onBeforeUnmount, onMounted, watch} from "vue";
 import { useRoute } from 'vue-router'
 import { hasPerm } from "@/perm/perm.js"
+import { sanitizeHtml } from '@/utils/sanitize.js'
 
 const settingStore = useSettingStore()
 const uiStore = useUiStore();
@@ -60,10 +61,12 @@ function showNotice(data) {
     elNotification.close()
   }
 
+  const noticeWidth = Number(data.noticeWidth) || 0;
+
   const style = document.createElement('style');
   style.innerHTML = `
   .custom-notice.el-notification {
-    --el-notification-width: min(${data.noticeWidth}px,calc(100% - 30px)) !important;
+    --el-notification-width: min(${noticeWidth}px,calc(100% - 30px)) !important;
   }
   `;
 
@@ -71,7 +74,7 @@ function showNotice(data) {
 
   elNotification = ElNotification({
     title: data.noticeTitle,
-    message: `<div style="width: 100%;height: 100%;">${data.noticeContent}</div>`,
+    message: `<div style="width: 100%;height: 100%;">${sanitizeHtml(data.noticeContent)}</div>`,
     type: data.noticeType === 'none' ? '' : data.noticeType,
     duration: data.noticeDuration,
     position: data.noticePosition,

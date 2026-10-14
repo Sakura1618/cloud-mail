@@ -204,13 +204,24 @@ const attService = {
 		await this.removeAttByField(c, 'email_id', emailIds);
 	},
 
-	selectByEmailIds(c, emailIds) {
-		return orm(c).select().from(att).where(
-			and(
-				inArray(att.emailId, emailIds),
-				eq(att.type, attConst.type.ATT)
-			))
-			.all();
+	async selectByEmailIds(c, emailIds) {
+		const ids = [...new Set((emailIds || []).filter(id => id !== undefined && id !== null))];
+		if (ids.length === 0) {
+			return [];
+		}
+		// 分批查询，避免 inArray 绑定参数超过 D1 上限
+		const BATCH_SIZE = 100;
+		const result = [];
+		for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+			const rows = await orm(c).select().from(att).where(
+				and(
+					inArray(att.emailId, ids.slice(i, i + BATCH_SIZE)),
+					eq(att.type, attConst.type.ATT)
+				))
+				.all();
+			result.push(...rows);
+		}
+		return result;
 	},
 
 	async removeAttByField(c, fieldName, fieldValues) {

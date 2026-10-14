@@ -35,15 +35,8 @@ const publicService = {
 				isDel: email.isDel,
 		}).from(email)
 
-		if (!size) {
-			size = 20
-		}
-
-		if (!num) {
-			num = 1
-		}
-
-		size = Number(size);
+		// 上限 50，避免单次拉取无界
+		size = Math.min(Number(size) || 20, 50);
 		num = Number(num);
 
 		num = (num - 1) * size;
@@ -177,16 +170,20 @@ const publicService = {
 
 		const userRow = await userService.selectByEmailIncludeDel(c, email);
 
+		// 先校验凭据，再判断管理员身份：否则可用错误密码探测某邮箱是否为管理员
+		let pwdOk = false;
+		if (userRow) {
+			pwdOk = await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password);
+		} else {
+			await cryptoUtils.dummyVerify(password);
+		}
+
+		if (!userRow || userRow.isDel === isDel.DELETE || !pwdOk) {
+			throw new BizError(t('authFail'));
+		}
+
 		if (email !== c.env.admin) {
 			throw new BizError(t('notAdmin'));
-		}
-
-		if (!userRow || userRow.isDel === isDel.DELETE) {
-			throw new BizError(t('notExistUser'));
-		}
-
-		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
-			throw new BizError(t('IncorrectPwd'));
 		}
 	}
 

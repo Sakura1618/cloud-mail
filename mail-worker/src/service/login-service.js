@@ -87,7 +87,7 @@ const loginService = {
 		}
 
 		if (accountRow) {
-			throw new BizError(t('isRegAccount'));
+			throw new BizError(t('regFail'));
 		}
 
 		let defType = null
@@ -209,7 +209,19 @@ const loginService = {
 
 		const userRow = await userService.selectByEmailIncludeDel(c, email);
 
-		if (!userRow) {
+		// 先校验凭据，再判断账号状态：账号不存在与密码错误返回同一文案，
+		// 且账号不存在时执行等价开销的哈希运算，消除账号枚举与计时侧信道
+		if (!noVerifyPwd) {
+			let pwdOk = false;
+			if (userRow) {
+				pwdOk = await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password);
+			} else {
+				await cryptoUtils.dummyVerify(password);
+			}
+			if (!userRow || !pwdOk) {
+				throw new BizError(t('authFail'));
+			}
+		} else if (!userRow) {
 			throw new BizError(t('notExistUser'));
 		}
 
@@ -219,10 +231,6 @@ const loginService = {
 
 		if(userRow.status === userConst.status.BAN) {
 			throw new BizError(t('isBanUser'));
-		}
-
-		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password) && !noVerifyPwd) {
-			throw new BizError(t('IncorrectPwd'));
 		}
 
 		const uuid = uuidv4();

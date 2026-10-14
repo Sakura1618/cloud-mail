@@ -44,7 +44,8 @@ const starService = {
 	async list(c, params, userId) {
 		let { emailId, size, full } = params;
 		emailId = Number(emailId) || 0;
-		size = Number(size);
+		// 上限 50，避免 full 模式下附件批量查询超出 D1 绑定参数上限
+		size = Math.min(Number(size) || 20, 50);
 		full = Number(full) === 1;
 		const columns = full ? emailListColumns : emailBriefColumns;
 

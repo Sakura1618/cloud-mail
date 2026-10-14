@@ -6,6 +6,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize.js'
 
 const props = defineProps({
   html: {
@@ -26,8 +27,8 @@ function updateContent() {
   const bodyStyleMatch = props.html.match(bodyStyleRegex);
   const bodyStyle = bodyStyleMatch ? bodyStyleMatch[1] : '';
 
-  // 2. 移除 <body> 标签（保留内容）
-  const cleanedHtml = props.html.replace(/<\/?body[^>]*>/gi, '');
+  // 2. 移除 <body> 标签（保留内容），再对不可信邮件 HTML 做白名单消毒
+  const cleanedHtml = sanitizeHtml(props.html.replace(/<\/?body[^>]*>/gi, ''));
 
   // 3. 将 body 的 style 应用到 .shadow-content
   shadowRoot.innerHTML = `

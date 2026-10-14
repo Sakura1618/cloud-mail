@@ -27,6 +27,11 @@ const saltHashUtils = {
 		return hash === storedHash;
 	},
 
+	// 账号不存在时也执行一次等价开销的哈希运算，消除账号枚举的计时侧信道
+	async dummyVerify(inputPassword) {
+		await this.genHashPassword(inputPassword, 'dummy-salt-not-used');
+	},
+
 	genRandomPwd(length = 8) {
 		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 		let result = '';

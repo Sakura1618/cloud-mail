@@ -1,5 +1,7 @@
 const zh = {
 	IncorrectPwd: '密码输入错误',
+	authFail: '邮箱或密码错误',
+	regFail: '注册失败，请更换邮箱或稍后重试',
 	addAccountDisabled: '添加邮箱功能已关闭',
 	regDisabled: '注册功能已关闭',
 	emptyEmail: '邮箱不能为空',

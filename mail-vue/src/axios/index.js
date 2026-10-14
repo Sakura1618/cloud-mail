@@ -2,6 +2,7 @@ import axios from "axios";
 import router from "@/router";
 import i18n from "@/i18n/index.js";
 import {useSettingStore} from "@/store/setting.js";
+import { sanitizeHtml } from "@/utils/sanitize.js";
 
 let http = axios.create({
     baseURL: import.meta.env.VITE_BASE_URL
@@ -49,7 +50,7 @@ http.interceptors.response.use((res) => {
             } else if (data.code === 502) {
                 ElMessage({
                     dangerouslyUseHTMLString: true,
-                    message: data.message,
+                    message: sanitizeHtml(data.message),
                     type: 'error',
                     plain: true,
                     grouping: true,

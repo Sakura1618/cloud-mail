@@ -1,5 +1,7 @@
 const en = {
 	IncorrectPwd: 'Incorrect password',
+	authFail: 'Incorrect email or password',
+	regFail: 'Registration failed. Please try again or use a different email',
 	addAccountDisabled: 'Add Email Address feature is disabled',
 	regDisabled: 'Sign up is disabled',
 	emptyEmail: 'Email cannot be empty',
