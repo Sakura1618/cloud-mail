@@ -6,13 +6,12 @@ import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { emailConst, isDel, roleConst, settingConst, userConst } from '../const/entity-const';
 import kvConst from '../const/kv-const';
 import KvConst from '../const/kv-const';
-import cryptoUtils from '../utils/crypto-utils';
+import passwordUtils from '../utils/password-utils';
 import emailService from './email-service';
 import dayjs from 'dayjs';
 import permService from './perm-service';
 import roleService from './role-service';
 import emailUtils from '../utils/email-utils';
-import saltHashUtils from '../utils/crypto-utils';
 import constant from '../const/constant';
 import { t } from '../i18n/i18n'
 import reqUtils from '../utils/req-utils';
@@ -56,6 +55,10 @@ const userService = {
 	},
 
 
+	async updatePasswordHash(c, userId, hash, salt) {
+		await orm(c).update(user).set({ password: hash, salt }).where(eq(user.userId, userId)).run();
+	},
+
 	async resetPassword(c, params, userId) {
 
 		const { password } = params;
@@ -63,8 +66,8 @@ const userService = {
 		if (password.length < 6) {
 			throw new BizError(t('pwdMinLength'));
 		}
-		const { salt, hash } = await cryptoUtils.hashPassword(password);
-		await orm(c).update(user).set({ password: hash, salt: salt }).where(eq(user.userId, userId)).run();
+		const { salt, hash } = await passwordUtils.hashPassword(password);
+		await userService.updatePasswordHash(c, userId, hash, salt);
 	},
 
 	selectByEmail(c, email) {
@@ -355,7 +358,7 @@ const userService = {
 			throw new BizError(t('roleNotExist'));
 		}
 
-		const { salt, hash } = await saltHashUtils.hashPassword(password);
+		const { salt, hash } = await passwordUtils.hashPassword(password);
 
 		const userId = await userService.insert(c, { email, password: hash, salt, type });
 

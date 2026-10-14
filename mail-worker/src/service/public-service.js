@@ -2,7 +2,7 @@ import BizError from '../error/biz-error';
 import orm from '../entity/orm';
 import { v4 as uuidv4 } from 'uuid';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import saltHashUtils from '../utils/crypto-utils';
+import passwordUtils from '../utils/password-utils';
 import cryptoUtils from '../utils/crypto-utils';
 import emailUtils from '../utils/email-utils';
 import roleService from './role-service';
@@ -101,7 +101,7 @@ const publicService = {
 				throw new BizError(t('notEmailDomain'));
 			}
 
-			const { salt, hash } = await saltHashUtils.hashPassword(
+			const { salt, hash } = await passwordUtils.hashPassword(
 				emailRow.password || cryptoUtils.genRandomPwd()
 			);
 
@@ -172,10 +172,13 @@ const publicService = {
 
 		// 先校验凭据，再判断管理员身份：否则可用错误密码探测某邮箱是否为管理员
 		let pwdOk = false;
+		let needsRehash = false;
 		if (userRow) {
-			pwdOk = await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password);
+			const verifyResult = await passwordUtils.verifyPassword(password, userRow.salt, userRow.password);
+			pwdOk = verifyResult.ok;
+			needsRehash = verifyResult.needsRehash;
 		} else {
-			await cryptoUtils.dummyVerify(password);
+			await passwordUtils.dummyVerify(password);
 		}
 
 		if (!userRow || userRow.isDel === isDel.DELETE || !pwdOk) {
@@ -184,6 +187,16 @@ const publicService = {
 
 		if (email !== c.env.admin) {
 			throw new BizError(t('notAdmin'));
+		}
+
+		// 与登录路径一致：旧格式校验通过后透明升级为 PBKDF2，失败只记日志
+		if (needsRehash) {
+			try {
+				const { salt, hash } = await passwordUtils.hashPassword(password);
+				await userService.updatePasswordHash(c, userRow.userId, hash, salt);
+			} catch (e) {
+				console.error('rehash password failed, userId:', userRow.userId, e);
+			}
 		}
 	}
 

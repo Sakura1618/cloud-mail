@@ -10,8 +10,7 @@ import userContext from '../security/user-context';
 import verifyUtils from '../utils/verify-utils';
 import accountService from './account-service';
 import settingService from './setting-service';
-import saltHashUtils from '../utils/crypto-utils';
-import cryptoUtils from '../utils/crypto-utils';
+import passwordUtils from '../utils/password-utils';
 import turnstileService from './turnstile-service';
 import roleService from './role-service';
 import regKeyService from './reg-key-service';
@@ -126,7 +125,7 @@ const loginService = {
 			}
 		}
 
-		const { salt, hash } = await saltHashUtils.hashPassword(password);
+		const { salt, hash } = await passwordUtils.hashPassword(password);
 
 		const userId = await userService.insert(c, { email, regKeyId,password: hash, salt, type: type || defType });
 
@@ -211,12 +210,15 @@ const loginService = {
 
 		// 先校验凭据，再判断账号状态：账号不存在与密码错误返回同一文案，
 		// 且账号不存在时执行等价开销的哈希运算，消除账号枚举与计时侧信道
+		let needsRehash = false;
 		if (!noVerifyPwd) {
 			let pwdOk = false;
 			if (userRow) {
-				pwdOk = await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password);
+				const verifyResult = await passwordUtils.verifyPassword(password, userRow.salt, userRow.password);
+				pwdOk = verifyResult.ok;
+				needsRehash = verifyResult.needsRehash;
 			} else {
-				await cryptoUtils.dummyVerify(password);
+				await passwordUtils.dummyVerify(password);
 			}
 			if (!userRow || !pwdOk) {
 				throw new BizError(t('authFail'));
@@ -231,6 +233,17 @@ const loginService = {
 
 		if(userRow.status === userConst.status.BAN) {
 			throw new BizError(t('isBanUser'));
+		}
+
+		// 旧格式（单轮 SHA-256）校验通过后透明升级为 PBKDF2：
+		// 单行 UPDATE，await 完成；失败只记日志，绝不阻断本次登录
+		if (needsRehash) {
+			try {
+				const { salt, hash } = await passwordUtils.hashPassword(password);
+				await userService.updatePasswordHash(c, userRow.userId, hash, salt);
+			} catch (e) {
+				console.error('rehash password failed, userId:', userRow.userId, e);
+			}
 		}
 
 		const uuid = uuidv4();
