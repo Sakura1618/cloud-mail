@@ -1,11 +1,11 @@
 name: 🚀 Deploy cloud-mail to Cloudflare Workers
 
+# Manual-only by design: this workflow deploys to production. If it also ran
+# automatically on push, an unconfigured or partial secret set could make the
+# D1/KV steps create brand-new resources and repoint the live worker at an
+# empty database. Restricting it to workflow_dispatch means it can only run
+# when a human explicitly asks for it.
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - "mail-worker/**"
-      - "mail-vue/**"
   workflow_dispatch:
 
 jobs:
@@ -89,6 +89,23 @@ jobs:
             exit 1
           fi
           
+          # Hard guards: auto-creating these resources is refused, because a
+          # freshly created (empty) D1/KV would silently repoint production at
+          # an empty database.
+          # 硬性校验：拒绝自动创建 D1/KV 资源，因为新建的空资源会让线上 Worker
+          # 指向空数据库，导致数据丢失。
+          if [ -z "$D1_DATABASE_ID" ]; then
+            echo "❌ D1_DATABASE_ID variable cannot be empty. Refusing to auto-create a D1 database, because that would point the worker at an empty database."
+            echo "❌ D1_DATABASE_ID 未配置：拒绝自动创建 D1 数据库，因为新建的空数据库会让线上 Worker 指向空数据，导致数据丢失。请手动填写 D1_DATABASE_ID。"
+            exit 1
+          fi
+          
+          if [ -z "$KV_NAMESPACE_ID" ]; then
+            echo "❌ KV_NAMESPACE_ID variable cannot be empty. Refusing to auto-create a KV namespace, because that would point the worker at an empty namespace."
+            echo "❌ KV_NAMESPACE_ID 未配置：拒绝自动创建 KV 命名空间，因为新建的空命名空间会让线上 Worker 指向空数据，导致数据丢失。请手动填写 KV_NAMESPACE_ID。"
+            exit 1
+          fi
+          
           if [ -z "$CUSTOM_DOMAIN" ]; then
             echo "::warning:: CUSTOM_DOMAIN variable is not set."
           fi
@@ -136,36 +153,12 @@ jobs:
           
           CONFIG_FILE="wrangler-action.toml"
           
-          if [ -n "$KV_NAMESPACE_ID" ]; then
-            sed -i "s|\${KV_NAMESPACE_ID}|${KV_NAMESPACE_ID}|g" "$CONFIG_FILE"
-            echo "✅ Using the database from environment variables."
-            exit 0
-          fi
-          
-          echo "🔍 Checking if the database exists..."
-          
-          set +e
-            KV_LIST=$(pnpm wrangler kv namespace list 2>&1)
-            STATUS=$?
-          set -e
-          
-          if [ $STATUS -ne 0 ]; then
-            echo "$KV_LIST"
-            exit 1
-          fi
-                  
-          if echo "$KV_LIST" | jq -e ".[] | select(.title == \"$NAME\")" >/dev/null; then
-            echo "✅ Database $NAME already exists."
-            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$NAME\") | .id")
-            echo "KV_NAMESPACE_ID: $KV_ID"
-          else
-            echo "⚠️ Database $NAME does not exist. Starting creation..."
-            pnpm wrangler kv namespace create $NAME
-            KV_LIST=$(pnpm wrangler kv namespace list)
-            KV_ID=$(echo "$KV_LIST" | jq -r ".[] | select(.title == \"$NAME\") | .id")
-          fi
-          
-          sed -i "s|\${KV_NAMESPACE_ID}|$KV_ID|g" "$CONFIG_FILE"
+          # The namespace id is mandatory (guarded above). This workflow never
+          # creates KV namespaces, so there is no fallback path here.
+          # 命名空间 id 为必填项（已在上方校验）。本工作流不会创建 KV 命名空间，
+          # 因此这里不存在任何自动创建的回退路径。
+          sed -i "s|\${KV_NAMESPACE_ID}|${KV_NAMESPACE_ID}|g" "$CONFIG_FILE"
+          echo "✅ Using the KV namespace from environment variables."
           echo "✅ Setup completed."
 
       - name: 🐬 设置D1数据库 / Set up D1 database
@@ -174,36 +167,12 @@ jobs:
           
           CONFIG_FILE="wrangler-action.toml"
           
-          if [ -n "$D1_DATABASE_ID" ]; then
-            sed -i "s|\${D1_DATABASE_ID}|${D1_DATABASE_ID}|g" "$CONFIG_FILE"
-            echo "✅ Using the database from environment variables."
-            exit 0
-          fi
-          
-          echo "🔍 Checking if the database exists..."
-          
-          set +e
-            DB_LIST=$(pnpm wrangler d1 list --json 2>&1)
-            STATUS=$?
-          set -e
-          
-          if [ $STATUS -ne 0 ]; then
-            echo "$DB_LIST"
-            exit 1
-          fi
-          
-          if echo "$DB_LIST" | jq -e ".[] | select(.name == \"$NAME\")" >/dev/null; then
-            echo "✅ Database $NAME already exists."
-            D1_ID=$(echo "$DB_LIST" | jq -r ".[] | select(.name == \"$NAME\") | .uuid")
-            echo "D1_DATABASE_ID: $D1_ID"
-          else
-            echo "⚠️ Database $NAME does not exist. Starting creation..."
-            pnpm wrangler d1 create $NAME
-            DB_LIST=$(pnpm wrangler d1 list --json)
-            D1_ID=$(echo "$DB_LIST" | jq -r ".[] | select(.name == \"$NAME\") | .uuid")
-          fi
-          
-          sed -i "s|\${D1_DATABASE_ID}|$D1_ID|g" "$CONFIG_FILE"
+          # The database id is mandatory (guarded above). This workflow never
+          # creates D1 databases, so there is no fallback path here.
+          # 数据库 id 为必填项（已在上方校验）。本工作流不会创建 D1 数据库，
+          # 因此这里不存在任何自动创建的回退路径。
+          sed -i "s|\${D1_DATABASE_ID}|${D1_DATABASE_ID}|g" "$CONFIG_FILE"
+          echo "✅ Using the D1 database from environment variables."
           echo "✅ Setup completed."
 
       - name: 🚀 开始部署 / Start deployment
