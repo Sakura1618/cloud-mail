@@ -26,3 +26,4 @@ mail-vue/dist
 .wrangler
 .venv
 git-tools.js
+mail-worker/wrangler.prod.toml
