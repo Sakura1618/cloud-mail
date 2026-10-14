@@ -55,7 +55,7 @@
                 <div class="att-size">{{ formatBytes(att.size) }}</div>
                 <div class="opt-icon att-icon">
                   <Icon v-if="isImage(att.filename)" icon="hugeicons:view" width="22" height="22" @click="showImage(att.key)"/>
-                  <a :href="cvtR2Url(att.key)" download>
+                  <a :href="attUrl(att.key)" download>
                     <Icon icon="system-uicons:push-down" width="22" height="22"/>
                   </a>
                 </div>
@@ -85,16 +85,15 @@ import {useAccountStore} from "@/store/account.js";
 import {formatDetailDate} from "@/utils/day.js";
 import {starAdd, starCancel} from "@/request/star.js";
 import {getExtName, formatBytes} from "@/utils/file-utils.js";
-import {cvtR2Url,toOssDomain} from "@/utils/convert.js";
+import {cvtR2Url, extractAttKeys, formatDomainContent} from "@/utils/convert.js";
+import {signAtt} from "@/request/att.js";
 import {getIconByName} from "@/utils/icon-utils.js";
-import {useSettingStore} from "@/store/setting.js";
 import {allEmailDelete} from "@/request/all-email.js";
 import {useUiStore} from "@/store/ui.js";
 import {useI18n} from "vue-i18n";
 import {EmailUnreadEnum} from "@/enums/email-enum.js";
 
 const uiStore = useUiStore();
-const settingStore = useSettingStore();
 const accountStore = useAccountStore();
 const emailStore = useEmailStore();
 const router = useRouter()
@@ -107,6 +106,31 @@ const email = computed(() => emailStore.contentData.email || {
 })
 const showPreview = ref(false)
 const srcList = reactive([])
+const signMap = ref({})
+
+async function refreshSign(keys) {
+  if (!keys?.length) {
+    signMap.value = {}
+    return
+  }
+  try {
+    const data = await signAtt(keys)
+    signMap.value = data?.urls || {}
+  } catch (e) {
+    console.error(e)
+    signMap.value = {}
+  }
+}
+
+watch(
+  () => [email.value?.emailId, email.value?.content],
+  () => {
+    const keys = new Set(extractAttKeys(email.value?.content))
+    ;(email.value?.attList || []).forEach(att => att?.key && keys.add(att.key))
+    refreshSign([...keys])
+  },
+  { immediate: true }
+)
 
 const { t } = useI18n()
 watch(() => accountStore.currentAccountId, () => {
@@ -181,14 +205,16 @@ function toMessage(message) {
 }
 
 function formatImage(content) {
-  content = content || '';
-  const domain = settingStore.settings.r2Domain;
-  return  content.replace(/{{domain}}/g, toOssDomain(domain) + '/');
+  return formatDomainContent(content, signMap.value)
+}
+
+function attUrl(key) {
+  return signMap.value[key] || cvtR2Url(key)
 }
 
 function showImage(key) {
   if (!isImage(key)) return;
-  const url = cvtR2Url(key)
+  const url = attUrl(key)
   srcList.length = 0
   srcList.push(url)
   showPreview.value = true

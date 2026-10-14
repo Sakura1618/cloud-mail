@@ -9,6 +9,7 @@ import { parseHTML } from 'linkedom';
 import { v4 as uuidv4 } from 'uuid';
 import domainUtils from '../utils/domain-uitls';
 import settingService from "./setting-service";
+import signUtils from '../utils/sign-utils';
 
 const attService = {
 
@@ -82,19 +83,19 @@ const attService = {
 			}
 
 			//邮件正文站内图片转cid附件
-			if (src && (src.startsWith(domainUtils.toOssDomain(r2Domain)) || src.startsWith('attachments/'))) {
+			//（签名 URL 形如 /attachments/<key>?e=&s=，提取 key 时需去掉查询串与前导斜杠）
+			const srcPath = src ? src.split('?')[0] : src;
+			if (srcPath && (srcPath.startsWith(domainUtils.toOssDomain(r2Domain)) || srcPath.startsWith('/attachments/') || srcPath.startsWith('attachments/'))) {
 
 				const cid = uuidv4().replace(/-/g, '')
 				img.setAttribute('src', 'cid:' + cid);
 
 				const attData = {};
 
-				if (src.startsWith(domainUtils.toOssDomain(r2Domain))) {
-					attData.key = src.replace(domainUtils.toOssDomain(r2Domain) + '/','');
-				}
-
-				if (src.startsWith('attachments/')) {
-					attData.key = src;
+				if (srcPath.startsWith('attachments/')) {
+					attData.key = srcPath;
+				} else {
+					attData.key = srcPath.replace(domainUtils.toOssDomain(r2Domain) + '/','').replace(/^\//, '');
 				}
 
 				attData.contentId = cid;
@@ -271,6 +272,34 @@ const attService = {
 			return []
 		}
 		return orm(c).select().from(att).where(inArray(att.key, keys)).orderBy(desc(att.attId)).groupBy(att.key).all();
+	},
+
+	// 为调用者有权访问的附件 key 签发短时效 URL；非本人（且非管理员）的 key 一律不签发。
+	async signKeys(c, keys, userId) {
+		const urls = {};
+		if (!Array.isArray(keys) || keys.length === 0) {
+			return urls;
+		}
+
+		// 去重并限量，避免超出 D1 绑定参数上限
+		const uniqueKeys = [...new Set(keys.filter(key => typeof key === 'string' && key))].slice(0, 50);
+		if (uniqueKeys.length === 0) {
+			return urls;
+		}
+
+		const rows = await orm(c).select({ key: att.key, userId: att.userId }).from(att)
+			.where(inArray(att.key, uniqueKeys)).all();
+
+		const isAdmin = c.get('user')?.email === c.env.admin;
+
+		for (const row of rows) {
+			if (!isAdmin && row.userId !== userId) {
+				continue;
+			}
+			urls[row.key] = await signUtils.signedPath(row.key, c.env.jwt_secret);
+		}
+
+		return urls;
 	}
 };
 

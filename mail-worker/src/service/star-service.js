@@ -57,6 +57,7 @@ const starService = {
 			.where(
 				and(
 					eq(star.userId, userId),
+					eq(email.userId, userId),
 					eq(email.isDel, isDel.NORMAL),
 					emailId ? lt(star.emailId, emailId) : undefined))
 			.orderBy(desc(star.emailId))

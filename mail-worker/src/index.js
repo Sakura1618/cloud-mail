@@ -6,6 +6,34 @@ import emailService from './service/email-service';
 import kvObjService from './service/kv-obj-service';
 import oauthService from './service/oauth-service';
 import analysisService from './service/analysis-service';
+import signUtils from './utils/sign-utils';
+import constant from './const/constant';
+
+// 附件/背景对象统一出口。除公开的站点背景外，必须携带由 /api/att/sign 签发的
+// 短时效签名（?e=&s=），否则无法按 key 直读对象。
+async function objResponse(env, url) {
+	const key = url.pathname.substring(1);
+
+	if (!key.startsWith(constant.BACKGROUND_PREFIX)) {
+		const ok = await signUtils.verify(
+			key,
+			url.searchParams.get('e'),
+			url.searchParams.get('s'),
+			env.jwt_secret
+		);
+		if (!ok) {
+			return new Response('Forbidden', { status: 403 });
+		}
+	}
+
+	const resp = await kvObjService.toObjResp({ env }, key);
+	if (!resp) {
+		return new Response('Not Found', { status: 404 });
+	}
+	resp.headers.set('X-Content-Type-Options', 'nosniff');
+	return resp;
+}
+
 export default {
 	 async fetch(req, env, ctx) {
 
@@ -18,7 +46,7 @@ export default {
 		}
 
 		 if (['/static/','/attachments/'].some(p => url.pathname.startsWith(p))) {
-			 return await kvObjService.toObjResp( { env }, url.pathname.substring(1));
+			 return await objResponse(env, url);
 		 }
 
 		return env.assets.fetch(req);
